@@ -1,18 +1,12 @@
 import tkinter as tk
 from tkinter import messagebox, ttk
 import mysql.connector
-import pandas as pd
 import os
 import face_recognition
 import cv2
 import numpy as np
 from datetime import datetime
 import csv
-
-
-
-
-
 # Global variables for database connection
 cur, conn = None, None
 # Modify connect_database to include face data insertion
@@ -56,53 +50,6 @@ def connect_database():
         print(f"Database connection error: {err}")
         root.destroy()  # Close the application if the database connection fails
         exit()
-
-
-# def insert_faces_into_database(known_faces_dir="faces"):
-#     """
-#     Iterate through the directory structure, find image files, and insert them into the database.
-#     If the same data exists, override it.
-#     """
-#     try:
-#         # Ensure the `images_table` exists with a LONGBLOB for storing large images
-#         cur.execute("""
-#             CREATE TABLE IF NOT EXISTS images_table (
-#                 id INT AUTO_INCREMENT PRIMARY KEY,
-#                 person_name VARCHAR(255) UNIQUE,  -- Make person_name unique to prevent duplicate entries
-#                 img LONGBLOB
-#             )
-#         """)
-
-#         # Process the directory
-#         for person_name in os.listdir(known_faces_dir):
-#             person_dir = os.path.join(known_faces_dir, person_name)
-
-#             if os.path.isdir(person_dir):  # Check if it's a directory
-#                 for filename in os.listdir(person_dir):
-#                     filepath = os.path.join(person_dir, filename)
-
-#                     # Check if it's an image file
-#                     if os.path.isfile(filepath) and (filename.lower().endswith(".jpg") or filename.lower().endswith(".png")):
-#                         # Read the image as binary
-#                         with open(filepath, 'rb') as file:
-#                             img_blob = file.read()
-
-#                         # Use INSERT ON DUPLICATE KEY UPDATE to override existing data
-#                         query = """
-#                             INSERT INTO images_table (person_name, img)
-#                             VALUES (%s, %s)
-#                             ON DUPLICATE KEY UPDATE img = VALUES(img)
-#                         """
-#                         cur.execute(query, (person_name, img_blob))
-#                         print(f"Inserted/Updated {filename} for {person_name} in the database.")
-
-#         conn.commit()
-#         print("All data has been inserted/updated successfully.")
-#     except mysql.connector.Error as err:
-#         print(f"Database error: {err}")
-#     except Exception as e:
-#         print(f"An unexpected error occurred: {e}")
-
 def insert_faces_into_database(known_faces_dir="faces"):
     """
     Iterate through the directory structure, find image files, and insert them into the database.
@@ -155,10 +102,7 @@ def insert_faces_into_database(known_faces_dir="faces"):
         print(f"Database error: {err}")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
-
-
 # Function to mark attendance
-
 def mark_attendance():
     if not cur or not conn:
         messagebox.showwarning("Database Error", "Database is not connected!")
