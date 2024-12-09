@@ -9,6 +9,10 @@ import numpy as np
 from datetime import datetime
 import csv
 
+
+
+
+
 # Global variables for database connection
 cur, conn = None, None
 # Modify connect_database to include face data insertion
