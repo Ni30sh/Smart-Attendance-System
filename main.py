@@ -7,13 +7,9 @@ import cv2
 import numpy as np
 from datetime import datetime
 import csv
-
 # Global variables for database connection
 cur, conn = None, None
-
-
 # Modify connect_database to include face data insertion
-
 def connect_database():
     global cur, conn
     try:
@@ -41,11 +37,9 @@ def connect_database():
                 UNIQUE(person_name) -- Ensure person_name is unique to allow overrides
             )
         """)
-
         # Insert face data into the images_table
         print("Inserting face data into the database...")
         insert_faces_into_database("faces")
-
         # Update the status label
         status_label.config(text="C", font=('chiller', 13, 'italic bold'), bg="green")
 
@@ -54,8 +48,6 @@ def connect_database():
         print(f"Database connection error: {err}")
         root.destroy()  # Close the application if the database connection fails
         exit()
-
-
 # Function to insert faces into the database
 def insert_faces_into_database(known_faces_dir="faces"):
     """
@@ -63,7 +55,6 @@ def insert_faces_into_database(known_faces_dir="faces"):
      only if the person is not already in the database.
     """
     try:
-
         # Ensure the `images_table` exists
         cur.execute("""
             CREATE TABLE IF NOT EXISTS images_table (
@@ -72,7 +63,6 @@ def insert_faces_into_database(known_faces_dir="faces"):
                 encoding LONGBLOB
             )
         """)
-
         # Process the directory and encode images
         for person_name in os.listdir(known_faces_dir):
             person_dir = os.path.join(known_faces_dir, person_name)
@@ -110,7 +100,6 @@ def insert_faces_into_database(known_faces_dir="faces"):
         print("All face encodings have been processed.")
     except Exception as e:
         print(f"An error occurred while inserting faces into the database: {e}")
-
 
 # Function to mark attendance
 def mark_attendance():
@@ -218,8 +207,6 @@ def mark_attendance():
         messagebox.showerror("Database Error", f"Failed to mark attendance: {err}")
     except Exception as e:
         messagebox.showerror("Error", f"An error occurred: {e}")
-
-
 def export_to_csv():
     if not cur or not conn:
         messagebox.showwarning("Database Error", "Database is not connected!")
@@ -273,7 +260,6 @@ def view_attendance():
         messagebox.showerror("Error", f"Failed to retrieve data: {err}")
     except Exception as e:
         messagebox.showerror("Error", f"An unexpected error occurred: {e}")
-
 
 # GUI Setup
 root = tk.Tk()
