@@ -7,9 +7,13 @@ import cv2
 import numpy as np
 from datetime import datetime
 import csv
+
 # Global variables for database connection
 cur, conn = None, None
+
+
 # Modify connect_database to include face data insertion
+
 def connect_database():
     global cur, conn
     try:
@@ -50,67 +54,76 @@ def connect_database():
         print(f"Database connection error: {err}")
         root.destroy()  # Close the application if the database connection fails
         exit()
+
+
+# Function to insert faces into the database
 def insert_faces_into_database(known_faces_dir="faces"):
     """
-    Iterate through the directory structure, find image files, and insert them into the database.
-    If the same data exists, override it.
+    Encode the images and insert into the `images_table`
+     only if the person is not already in the database.
     """
     try:
-        # Ensure the `images_table` exists with a LONGBLOB for storing large images
+
+        # Ensure the `images_table` exists
         cur.execute("""
             CREATE TABLE IF NOT EXISTS images_table (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                person_name VARCHAR(255) UNIQUE,  -- Make person_name unique to prevent duplicate entries
-                img LONGBLOB
+                person_name VARCHAR(255) UNIQUE,
+                encoding LONGBLOB
             )
         """)
 
-        # Process the directory
+        # Process the directory and encode images
         for person_name in os.listdir(known_faces_dir):
             person_dir = os.path.join(known_faces_dir, person_name)
+            if os.path.isdir(person_dir):
+                # Check if the person already exists in the database
+                cur.execute("SELECT person_name FROM images_table WHERE person_name = %s", (person_name,))
+                existing_record = cur.fetchone()
 
-            if os.path.isdir(person_dir):  # Check if it's a directory
+                if existing_record:
+                    print(f"Data for {person_name} is already in the database. Skipping insertion.")
+                    continue
+
+                # Collect all encodings for the person
+                person_encodings = []
                 for filename in os.listdir(person_dir):
                     filepath = os.path.join(person_dir, filename)
+                    if filename.endswith((".jpg", ".png")):
+                        image = face_recognition.load_image_file(filepath)
+                        encodings = face_recognition.face_encodings(image)
+                        if encodings:
+                            person_encodings.append(encodings[0])
 
-                    # Check if it's an image file
-                    if os.path.isfile(filepath) and (
-                            filename.lower().endswith(".jpg") or filename.lower().endswith(".png")):
-                        # Read the image as binary
-                        with open(filepath, 'rb') as file:
-                            img_blob = file.read()
+                # Insert the average encoding into the database
+                if person_encodings:
+                    average_encoding = np.mean(person_encodings, axis=0)
+                    encoding_blob = average_encoding.tobytes()
 
-                        # Check if the person already exists in the database
-                        cur.execute("SELECT img FROM images_table WHERE person_name = %s", (person_name,))
-                        existing_record = cur.fetchone()
-
-                        if existing_record:
-                            print(f"Data for {person_name} is already in the database")
-                        else:  # Insert
-                            print(f"Data for {person_name} is not in the database. Uploading new file {filename}.")
-                            query = """
-                                 INSERT INTO images_table (person_name, img)
-                                VALUES (%s, %s)
-                                ON DUPLICATE KEY UPDATE img = VALUES(img)
-                        """
-                            cur.execute(query, (person_name, img_blob))
-                            print(f"Inserted/Updated {filename} for {person_name} in the database.")
+                    cur.execute("""
+                        INSERT INTO images_table (person_name, encoding)
+                        VALUES (%s, %s)
+                    """, (person_name, encoding_blob))
+                    print(f"Inserted encoding for {person_name} into the database.")
 
         conn.commit()
-        # print("All data has been inserted/updated successfully.")
-    except mysql.connector.Error as err:
-        print(f"Database error: {err}")
+        print("All face encodings have been processed.")
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        print(f"An error occurred while inserting faces into the database: {e}")
+
+
 # Function to mark attendance
 def mark_attendance():
+    """
+    Perform face recognition using webcam feed and mark attendance based on the `images_table` data.
+    """
     if not cur or not conn:
         messagebox.showwarning("Database Error", "Database is not connected!")
         return
 
     try:
         # Fetch known faces and names from the database
-        cur.execute("SELECT person_name, img FROM images_table")
+        cur.execute("SELECT person_name, encoding FROM images_table")
         records = cur.fetchall()
 
         if not records:
@@ -121,15 +134,10 @@ def mark_attendance():
         known_encodings = []
         known_names = []
 
-        for record in records:
-            person_name, image_blob = record
-            np_image = np.frombuffer(image_blob, dtype=np.uint8)
-            image = cv2.imdecode(np_image, cv2.IMREAD_COLOR)
-            encodings = face_recognition.face_encodings(image)
-
-            if encodings:
-                known_encodings.append(encodings[0])
-                known_names.append(person_name)  # Use person_name directly
+        for person_name, encoding_blob in records:
+            encoding = np.frombuffer(encoding_blob, dtype=np.float64)
+            known_encodings.append(encoding)
+            known_names.append(person_name)
 
         # Initialize attendance dictionary
         attendance = {name: "Absent" for name in known_names}
@@ -185,15 +193,14 @@ def mark_attendance():
 
         # Ensure the table exists
         cur.execute(f"""
-                CREATE TABLE IF NOT EXISTS `{table_name}` (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    person_name VARCHAR(255),
-                    status ENUM('Present', 'Absent') NOT NULL,
-                    time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    UNIQUE(person_name)  -- Ensure person_name is unique to allow overrides
-                )
-            """)
-
+            CREATE TABLE IF NOT EXISTS `{table_name}` (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                person_name VARCHAR(255),
+                status ENUM('Present', 'Absent') NOT NULL,
+                time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE(person_name)
+            )
+        """)
         # Insert or update attendance data into the table
         for name, status in attendance.items():
             cur.execute(f"""
@@ -206,7 +213,6 @@ def mark_attendance():
         messagebox.showinfo("Attendance", "Attendance has been marked successfully.")
         view_attendance()
         export_to_csv()
-
 
     except mysql.connector.Error as err:
         messagebox.showerror("Database Error", f"Failed to mark attendance: {err}")
@@ -281,11 +287,10 @@ status_label.place(x=10, y=10)
 # Automatically connect to the database when the application starts
 
 connect_database()
-insert_faces_into_database()
 
 # Buttons
 mark_button = tk.Button(root, text="Mark Attendance", command=mark_attendance)
-mark_button.grid(row=1, column=2, padx=30, pady=30, sticky="w")
+mark_button.grid(row=1, column=2, padx=260, pady=30, sticky="w")
 
 # Treeview for displaying attendance records
 columns = ("ID", "Name", "Time", "Status")
